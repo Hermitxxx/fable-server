@@ -105,8 +105,6 @@ async function run() {
                 query.writerId = req.query.writerId
             }
 
-            console.log(query);
-
             const books = await booksColl.find({
                 writerId: query.writerId
             }).toArray()
@@ -172,6 +170,22 @@ async function run() {
         app.post('/api/books', async (req, res) => {
             const data = req.body
             const result = await booksColl.insertOne(data)
+            res.json(result)
+        })
+
+        // update a book uploaded by writer (writer function)
+        app.patch('/api/books/:id', async (req, res) => {
+            const id = req.params.id
+            const filter = {
+                _id: new ObjectId(id)
+            }
+            const updatedData = req.body
+
+            console.log(updatedData);
+
+            const result = await booksColl.updateOne(filter, {
+                $set: updatedData
+            })
             res.json(result)
         })
 
