@@ -29,13 +29,15 @@ async function run() {
         const booksColl = db.collection('books')
         const usersColl = db.collection('user')
         const writersColl = db.collection('writers')
+        const bookmarksColl = db.collection('bookmarks')
+        const transactionsColl = db.collection('transactions')
 
         // --------- OPEN FETCHES ---------- //
 
         // get all books
         app.get('/api/books', async (req, res) => {
             const cursor = booksColl.find()
-            const result = await cursor.toArray()
+            const result = await cursor.sort({ createdAt: -1 }).toArray()
             res.json(result)
         })
 
@@ -61,6 +63,49 @@ async function run() {
 
         // ------------------------------------------------------------------
 
+        // ------------- global fetches ----------------
+
+        // add to bookmarks (global user function)
+        app.post('/api/bookmarks', async (req, res) => {
+            const bookmarkData = req.body
+            const result = await bookmarksColl.insertOne(bookmarkData)
+            res.json(result)
+        })
+
+        // get all bookmarked books
+        app.get('/api/bookmarks', async (req, res) => {
+            const filter = {}
+            if (req.query.userId) {
+                filter.userId = req.query.userId
+            }
+
+            console.log(filter);
+
+            const bookmarks = await bookmarksColl.find(filter).toArray()
+
+            const bookIds = bookmarks.map(bookmark => bookmark.bookId)
+
+
+            const books = await booksColl.find({
+                _id: {
+                    $in: bookIds.map(id => new ObjectId(id))
+                }
+            }).toArray()
+            res.json(books)
+        })
+
+        // remove from the bookmark
+        app.delete('/api/bookmarks/:id', async (req, res) => {
+            const id = req.params.id
+            const filter = {
+                bookId: id
+            }
+            const result = await bookmarksColl.deleteOne(filter)
+            res.json(result)
+        })
+
+        // --------------------------------------------------
+
 
         // ------------ SECURED FETCHES ----------------
         // books
@@ -81,7 +126,7 @@ async function run() {
                 query.writerId = req.query.writerId
             }
 
-            console.log(query);
+            // console.log(query);
 
             const result = await booksColl.aggregate([
                 { $match: { writerId: query.writerId } },
@@ -166,10 +211,14 @@ async function run() {
             })
         })
 
-        // publish a book (writer fucniton)
+        // upload a book (writer fucniton)
         app.post('/api/books', async (req, res) => {
             const data = req.body
-            const result = await booksColl.insertOne(data)
+            const newBook = {
+                ...data,
+                createdAt: new Date().toTimeString()
+            }
+            const result = await booksColl.insertOne(newBook)
             res.json(result)
         })
 
@@ -181,7 +230,7 @@ async function run() {
             }
             const updatedData = req.body
 
-            console.log(updatedData);
+            // console.log(updatedData);
 
             const result = await booksColl.updateOne(filter, {
                 $set: updatedData
@@ -218,7 +267,7 @@ async function run() {
         app.delete('/api/books/:id', async (req, res) => {
             const id = req.params.id
 
-            console.log(id);
+            // console.log(id);
             const query = {
                 _id: new ObjectId(id)
             }
@@ -238,7 +287,7 @@ async function run() {
         // update a user role
         app.patch('/api/users', async (req, res) => {
             const query = {}
-            console.log(req.body);
+            // console.log(req.body);
             if (req.body.userId) {
                 query.userId = req.body.userId
             }
@@ -251,7 +300,7 @@ async function run() {
                 _id: new ObjectId(query.userId)
             }
 
-            console.log(query);
+            // console.log(query);
 
             const updatedData = {
                 $set: {
@@ -268,13 +317,143 @@ async function run() {
         app.delete('/api/users/:id', async (req, res) => {
             const id = req.params.id
 
-            console.log(id);
+            // console.log(id);
             const query = {
                 _id: new ObjectId(id)
             }
 
             const result = await usersColl.deleteOne(query)
             res.json(result)
+        })
+
+        // // transactions
+        app.post('/api/transactions', async (req, res) => {
+            try {
+                const data = req.body;
+
+                const transactionResult =
+                    await transactionsColl.insertOne(data);
+
+                await booksColl.updateOne(
+                    {
+                        _id: new ObjectId(data.bookId),
+                    },
+                    {
+                        $inc: {
+                            purchaseCount: 1,
+                        },
+                    }
+                );
+
+                res.send({
+                    success: true,
+                    insertedId: transactionResult.insertedId,
+                });
+            } catch (error) {
+                console.error(error);
+
+                res.status(500).send({
+                    success: false,
+                    message: error.message,
+                });
+            }
+        });
+
+        // get all transaactions-books by user id 
+        app.get('/api/transactions', async (req, res) => {
+            const result = await transactionsColl.find().toArray()
+            res.json(result)
+        })
+
+        // get purchased books
+        // app.get('/api/purchased-books', async (req, res) => {
+
+        //     const pipeline = [
+        //         {
+        //             $match: {
+        //                 buyerId: req.query.buyerId
+        //             }
+        //         },
+        //         {
+        //             $lookup: {
+        //                 from: "books",
+
+        //                 let: {
+        //                     bookId: "$bookId"
+        //                 },
+
+        //                 pipeline: [
+        //                     {
+        //                         $match: {
+        //                             $expr: {
+        //                                 $eq: [
+        //                                     {
+        //                                         $toString: "$_id"
+        //                                     },
+        //                                     "$$bookId"
+        //                                 ]
+        //                             }
+        //                         }
+        //                     }
+        //                 ],
+
+        //                 as: "book"
+        //             }
+        //         },
+        //         {
+        //             $unwind: "$book"
+        //         }
+        //     ]
+
+        //     const purchasedBooks = await transactionsColl
+        //         .aggregate(pipeline)
+        //         .toArray()
+
+        //     res.json(purchasedBooks)
+        // })
+
+        app.get('/api/purchased-books', async (req, res) => {
+
+            const pipeline = [
+                {
+                    $match: {
+                        buyerId: req.query.buyerId
+                    }
+                },
+                {
+                    $lookup: {
+                        from: "books",
+                        let: {
+                            bookId: "$bookId"
+                        },
+                        pipeline: [
+                            {
+                                $match: {
+                                    $expr: {
+                                        $eq: [
+                                            { $toString: "$_id" },
+                                            "$$bookId"
+                                        ]
+                                    }
+                                }
+                            }
+                        ],
+                        as: "book"
+                    }
+                },
+                {
+                    $unwind: "$book"
+                },
+                {
+                    $replaceRoot: {
+                        newRoot: "$book"
+                    }
+                }
+            ]
+
+            const purchasedBooks = await transactionsColl.aggregate(pipeline).toArray()
+
+            res.json(purchasedBooks)
         })
 
         // Send a ping to confirm a successful connection hello
