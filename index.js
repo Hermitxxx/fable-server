@@ -35,11 +35,87 @@ async function run() {
         // --------- OPEN FETCHES ---------- //
 
         // get all books
+        // ─── Backend: Express route update ───────────────────────────────────────────
+        // Replace your existing GET /api/books with this version.
+        // It accepts: ?search=&genre=&writer=&page=&limit=
+
         app.get('/api/books', async (req, res) => {
-            const cursor = booksColl.find()
-            const result = await cursor.sort({ createdAt: -1 }).toArray()
-            res.json(result)
-        })
+            const {
+                search = "",
+                genre = "",
+                writer = "",
+                page = "1",
+                limit = '9',
+            } = req.query;
+
+            const pageNum = Math.max(1, parseInt(page, 10));
+            const limitNum = Math.max(1, parseInt(limit, 10));
+            const skip = (pageNum - 1) * limitNum;
+
+            // Build MongoDB filter
+            const filter = { parchment: { $regex: /^published$/i } };
+
+            if (search) {
+                filter.$or = [
+                    { title: { $regex: search, $options: "i" } },
+                    { writerName: { $regex: search, $options: "i" } },
+                ];
+            }
+
+            if (genre) filter.genre = { $regex: `^${genre}$`, $options: "i" };
+            if (writer) filter.writerName = { $regex: `^${writer}$`, $options: "i" };
+
+            const [books, total] = await Promise.all([
+                booksColl.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limitNum).toArray(),
+                booksColl.countDocuments(filter),
+            ]);
+
+            res.json({
+                books,
+                total,
+                totalPages: Math.ceil(total / limitNum),
+                page: pageNum,
+            });
+        });
+
+        app.get('/api/books-admin', async (req, res) => {
+            const {
+                search = "",
+                genre = "",
+                writer = "",
+                page = "1",
+                limit,
+            } = req.query;
+
+            const pageNum = Math.max(1, parseInt(page, 10));
+            const limitNum = Math.max(1, parseInt(limit, 10));
+            const skip = (pageNum - 1) * limitNum;
+
+            // Build MongoDB filter
+            const filter = { parchment: { $regex: /^published$/i } };
+
+            if (search) {
+                filter.$or = [
+                    { title: { $regex: search, $options: "i" } },
+                    { writerName: { $regex: search, $options: "i" } },
+                ];
+            }
+
+            if (genre) filter.genre = { $regex: `^${genre}$`, $options: "i" };
+            if (writer) filter.writerName = { $regex: `^${writer}$`, $options: "i" };
+
+            const [books, total] = await Promise.all([
+                booksColl.find().sort({ createdAt: -1 }).skip(skip).limit(limitNum).toArray(),
+                booksColl.countDocuments(filter),
+            ]);
+
+            res.json({
+                books,
+                total,
+                totalPages: Math.ceil(total / limitNum),
+                page: pageNum,
+            });
+        });
 
         // get all writers
         app.get('/api/writers', async (req, res) => {
@@ -216,7 +292,7 @@ async function run() {
             const data = req.body
             const newBook = {
                 ...data,
-                createdAt: new Date().toTimeString()
+                createdAt: new Date().toISOString()
             }
             const result = await booksColl.insertOne(newBook)
             res.json(result)
@@ -359,7 +435,7 @@ async function run() {
             }
         });
 
-        // get all transaactions-books by user id 
+        // get all transaactions-books
         app.get('/api/transactions', async (req, res) => {
             const result = await transactionsColl.find().toArray()
             res.json(result)
