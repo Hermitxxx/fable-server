@@ -31,6 +31,69 @@ async function run() {
         const writersColl = db.collection('writers')
         const bookmarksColl = db.collection('bookmarks')
         const transactionsColl = db.collection('transactions')
+        const sessionCollection = db.collection('session');
+
+        // verification related fucntions
+        const verifyToken = async (req, res, next) => {
+
+            const authHeader = req.headers?.authorization;
+            if (!authHeader) {
+                return res.status(401).send({ message: 'unauthorized access' })
+            }
+
+            const token = authHeader.split(' ')[1]
+
+            if (!token) {
+                return res.status(401).send({ message: 'unauthorized access' })
+            }
+
+            const query = { token: token }
+            const session = await sessionCollection.findOne(query);
+
+            if (!session) {
+                return res.status(401).send({ message: 'unauthorized access' })
+            }
+
+            const userId = session.userId;
+
+
+            const userQuery = {
+                _id: userId
+            }
+
+            const user = await usersColl.findOne(userQuery);
+            if (!user) {
+                return res.status(401).send({ message: 'unauthorized access' })
+            }
+
+            // set data in the req object
+            req.user = user;
+            next();
+        }
+
+        // must be used after verifyToken middleware
+        const verifyReader = async (req, res, next) => {
+            if (req.user?.role !== 'reader') {
+                return res.status(403).send({ message: 'forbidden access' })
+            }
+            next();
+        }
+
+        // must be used after verifyToken middleware
+        const verifyWriter = async (req, res, next) => {
+            if (req.user?.role !== 'writer') {
+                return res.status(403).send({ message: 'forbidden access' })
+            }
+            next();
+        }
+
+        // must be used after verifyToken middleware
+        const verifyAdmin = async (req, res, next) => {
+            if (req.user.role !== 'admin') {
+                return res.status(403).send({ message: 'forbidden access' })
+            }
+            next();
+        }
 
         // --------- OPEN FETCHES ---------- //
 
@@ -220,7 +283,7 @@ async function run() {
         })
 
         // get writer's stats
-        app.get('/api/writer-stats', async (req, res) => {
+        app.get('/api/writer-stats', verifyToken, verifyWriter, async (req, res) => {
             const query = {}
             if (req.query.writerId) {
                 query.writerId = req.query.writerId
