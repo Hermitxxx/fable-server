@@ -205,7 +205,7 @@ async function run() {
         // ------------- global fetches ----------------
 
         // add to bookmarks (global user function)
-        app.post('/api/bookmarks', async (req, res) => {
+        app.post('/api/bookmarks', verifyToken, async (req, res) => {
             const bookmarkData = req.body
             const result = await bookmarksColl.insertOne(bookmarkData)
             res.json(result)
@@ -234,7 +234,7 @@ async function run() {
         })
 
         // remove from the bookmark
-        app.delete('/api/bookmarks/:id', async (req, res) => {
+        app.delete('/api/bookmarks/:id', verifyToken, async (req, res) => {
             const id = req.params.id
             const filter = {
                 bookId: id
@@ -248,7 +248,7 @@ async function run() {
 
         // ------------ SECURED FETCHES ----------------
         // books
-        app.get('/api/books/:id', async (req, res) => {
+        app.get('/api/books/:id', verifyToken, async (req, res) => {
             const id = req.params.id
             const query = {
                 _id: new ObjectId(id)
@@ -259,7 +259,7 @@ async function run() {
         })
 
         // get books by writer id
-        app.get('/api/writer-books', async (req, res) => {
+        app.get('/api/writer-books', verifyToken, verifyWriter, async (req, res) => {
             const query = {}
             if (req.query.writerId) {
                 query.writerId = req.query.writerId
@@ -351,7 +351,7 @@ async function run() {
         })
 
         // upload a book (writer fucniton)
-        app.post('/api/books', async (req, res) => {
+        app.post('/api/books', verifyToken, verifyWriter, async (req, res) => {
             const data = req.body
             const newBook = {
                 ...data,
@@ -362,7 +362,7 @@ async function run() {
         })
 
         // update a book uploaded by writer (writer function)
-        app.patch('/api/books/:id', async (req, res) => {
+        app.patch('/api/books/:id', verifyToken, verifyWriter, async (req, res) => {
             const id = req.params.id
             const filter = {
                 _id: new ObjectId(id)
@@ -378,7 +378,7 @@ async function run() {
         })
 
         // publish or unpublish a book (admin function)
-        app.patch('/api/books', async (req, res) => {
+        app.patch('/api/books', verifyToken, async (req, res) => {
             const query = {}
             if (req.body.bookId) {
                 query.bookId = req.body.bookId
@@ -403,7 +403,7 @@ async function run() {
         })
 
         // delete a book
-        app.delete('/api/books/:id', async (req, res) => {
+        app.delete('/api/books/:id', verifyToken, async (req, res) => {
             const id = req.params.id
 
             // console.log(id);
@@ -417,14 +417,14 @@ async function run() {
 
         // users
         // get all users 
-        app.get('/api/users', async (req, res) => {
+        app.get('/api/users', verifyToken, verifyAdmin, async (req, res) => {
             const cursor = usersColl.find()
             const result = await cursor.toArray()
             res.json(result)
         })
 
         // update a user role
-        app.patch('/api/users', async (req, res) => {
+        app.patch('/api/users', verifyToken, verifyAdmin, async (req, res) => {
             const query = {}
             // console.log(req.body);
             if (req.body.userId) {
@@ -453,7 +453,7 @@ async function run() {
         })
 
         // delete a user
-        app.delete('/api/users/:id', async (req, res) => {
+        app.delete('/api/users/:id', verifyToken, verifyAdmin, async (req, res) => {
             const id = req.params.id
 
             // console.log(id);
@@ -466,7 +466,7 @@ async function run() {
         })
 
         // // transactions
-        app.post('/api/transactions', async (req, res) => {
+        app.post('/api/transactions', verifyToken, async (req, res) => {
             try {
                 const data = req.body;
 
@@ -499,7 +499,7 @@ async function run() {
         });
 
         // get all transaactions-books
-        app.get('/api/transactions', async (req, res) => {
+        app.get('/api/transactions', verifyToken, verifyAdmin, async (req, res) => {
             const result = await transactionsColl.find().toArray()
             res.json(result)
         })
