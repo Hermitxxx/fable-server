@@ -259,7 +259,7 @@ async function run() {
         })
 
         // get books by writer id
-        app.get('/api/writer-books', verifyToken, verifyWriter, async (req, res) => {
+        app.get('/api/writer-books', verifyToken, async (req, res) => {
             const query = {}
             if (req.query.writerId) {
                 query.writerId = req.query.writerId
